@@ -1,0 +1,21 @@
+{
+  "name": "robot-id-card",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Universal identity standard for AI bots and agents on the internet",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm test --workspaces",
+    "dev:registry": "npm run dev --workspace=packages/registry",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["bot", "identity", "ai-agent", "security", "browser-extension"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/robot-id-card"
+  }
+}

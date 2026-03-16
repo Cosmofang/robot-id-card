@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.ric.json
+*.private.json
+.env
+.env.local
+*.db
+*.sqlite
