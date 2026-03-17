@@ -206,4 +206,65 @@ program
     }
   })
 
+// ──────────────────────────────────────────────
+// ric claim
+// ──────────────────────────────────────────────
+program
+  .command('claim')
+  .description('Claim your bot identity today (max 2×/day, 3 consecutive days → HEALTHY)')
+  .option('--cert <file>', 'Certificate file from `ric register`', './bot.ric.json')
+  .action(async (opts) => {
+    if (!fs.existsSync(opts.cert)) {
+      console.error(`Certificate file not found: ${opts.cert}`)
+      process.exit(1)
+    }
+
+    const cert = JSON.parse(fs.readFileSync(opts.cert, 'utf8'))
+    const { id, private_key_hex, public_key } = cert
+
+    if (!id || !private_key_hex) {
+      console.error('Invalid certificate file — missing id or private_key_hex')
+      process.exit(1)
+    }
+
+    const date = new Date().toISOString().slice(0, 10)
+    const message = `${id}:${date}`
+    const msgBytes = new TextEncoder().encode(message)
+
+    const privBytes = Buffer.from(private_key_hex, 'hex')
+    const sigBytes = await ed.sign(msgBytes, privBytes)
+    const signature = `ed25519:${Buffer.from(sigBytes).toString('hex')}`
+
+    try {
+      const res = await fetch(`${REGISTRY}/v1/bots/${id}/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signature, date }),
+      })
+
+      const data = await res.json() as any
+
+      if (!res.ok) {
+        console.error(`\n❌ ${data.error}`)
+        if (data.message) console.error(`   ${data.message}`)
+        process.exit(1)
+      }
+
+      const gradeEmoji = { healthy: '🟢', unknown: '🟡', dangerous: '🔴' }[data.grade as string] || '⚪'
+      console.log(`\n${gradeEmoji} Identity claimed for ${id}`)
+      console.log(`   Streak    : ${data.consecutive_days} consecutive day(s)`)
+      console.log(`   Today     : ${data.today_count}/2 claims used`)
+      console.log(`   Grade     : ${data.grade.toUpperCase()}`)
+      if (data.grade_upgraded) {
+        console.log(`\n🎉 Grade upgraded to HEALTHY!`)
+      }
+      if (data.certificate_type === 'code' && Array.isArray(data.award)) {
+        console.log('\n' + data.award.join('\n'))
+      }
+    } catch (e) {
+      console.error('Failed to connect to registry:', e)
+      process.exit(1)
+    }
+  })
+
 program.parse()

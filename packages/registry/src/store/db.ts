@@ -35,7 +35,11 @@ db.exec(`
     bot_version     TEXT NOT NULL,
     bot_purpose     TEXT NOT NULL,
     bot_capabilities TEXT NOT NULL, -- JSON array
-    bot_user_agent  TEXT NOT NULL
+    bot_user_agent  TEXT NOT NULL,
+    -- Claim tracking
+    last_claim_date   TEXT,               -- ISO date of most recent claim (YYYY-MM-DD)
+    consecutive_days  INTEGER NOT NULL DEFAULT 0,  -- streak of consecutive daily claims
+    total_claims      INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS audit_log (
@@ -48,6 +52,16 @@ db.exec(`
     reporter   TEXT,
     description TEXT,
     timestamp  TEXT NOT NULL,
+    FOREIGN KEY (ric_id) REFERENCES bots(id)
+  );
+
+  -- One row per claim attempt, for daily-limit checks and history
+  CREATE TABLE IF NOT EXISTS claims (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    ric_id       TEXT NOT NULL,
+    claim_date   TEXT NOT NULL,   -- YYYY-MM-DD
+    claimed_at   TEXT NOT NULL,   -- ISO timestamp
+    consecutive_after INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (ric_id) REFERENCES bots(id)
   );
 `)

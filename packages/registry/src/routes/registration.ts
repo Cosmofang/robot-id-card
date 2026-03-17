@@ -81,7 +81,10 @@ export const registrationRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
 
-    const id = `ric_${nanoid(16)}`
+    // Embed first 8 hex chars of public key as fingerprint — the bot's identity
+    // is permanently woven into its RIC ID: ric_{fp8}_{rand8}
+    const fingerprint = pubKeyHex.slice(0, 8)
+    const id = `ric_${fingerprint}_${nanoid(8)}`
     const now = new Date().toISOString()
 
     const certificate = {

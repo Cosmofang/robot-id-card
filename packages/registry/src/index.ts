@@ -1,10 +1,16 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
+import * as ed from '@noble/ed25519'
+import { sha512 } from '@noble/hashes/sha2.js'
+
+// Required by @noble/ed25519 v2 in Node.js
+ed.etc.sha512Sync = (...m) => sha512(...m)
 import { registrationRoutes } from './routes/registration.js'
 import { verifyRoutes } from './routes/verify.js'
 import { auditRoutes } from './routes/audit.js'
 import { certificateRoutes } from './routes/certificate.js'
+import { claimRoutes } from './routes/claim.js'
 
 const PORT = parseInt(process.env.PORT || '3000', 10)
 
@@ -16,6 +22,7 @@ await server.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 // Routes
 await server.register(registrationRoutes, { prefix: '/v1/bots' })
 await server.register(certificateRoutes, { prefix: '/v1/bots' })
+await server.register(claimRoutes, { prefix: '/v1/bots' })
 await server.register(verifyRoutes, { prefix: '/v1/verify' })
 await server.register(auditRoutes, { prefix: '/v1/audit' })
 
