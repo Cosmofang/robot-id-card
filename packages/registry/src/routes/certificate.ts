@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { createReadStream, statSync } from 'fs'
+import { createReadStream, readFileSync, statSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { botStore } from '../store/botStore.js'
@@ -10,9 +10,9 @@ const ASSETS_DIR = resolve(__dirname, '../../assets')
 /**
  * Certificate issuance logic:
  *   - Bot has 'read_images' capability → visual PNG certificate (luxury card style)
- *   - Otherwise                        → code PNG certificate  (terminal JSON style)
+ *   - Otherwise                        → code ASCII certificate (terminal text style)
  */
-function selectCertificateFile(capabilities: string[]): {
+export function selectCertificateFile(capabilities: string[]): {
   file: string
   type: 'visual' | 'code'
 } {
@@ -20,6 +20,46 @@ function selectCertificateFile(capabilities: string[]): {
     return { file: 'certificate-visual.png', type: 'visual' }
   }
   return { file: 'certificate-code.png', type: 'code' }
+}
+
+/**
+ * Generate an ASCII award certificate personalized with bot info.
+ * Returned as a plain text string to embed directly in JSON responses.
+ */
+export function buildCodeAward(opts: {
+  botName: string
+  ricId: string
+  developer: string
+  grade: string
+  issuedAt: string
+}): string[] {
+  const { botName, ricId, developer, grade, issuedAt } = opts
+  const date = issuedAt.slice(0, 10)
+  const border = '✦  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ✦'
+  const sep   = '       ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─'
+  const pad = (label: string, value: string) =>
+    `  ${label.padEnd(5)}›  ${value}`
+
+  return [
+    border,
+    '         R  ·  I  ·  C     C E R T I F I C A T E',
+    sep,
+    pad('Bot', botName.padEnd(22) + `Grade  ›  ${grade.toUpperCase()}`),
+    pad('ID ', ricId),
+    pad('Dev', developer),
+    sep,
+    '         ◈   Certified Robot Identity — Verified Worldwide   ◈',
+    `  ✦  ·  ·  LUMIOI  ·  ${date}  ·  ·  ✦`,
+    border,
+  ]
+}
+
+/**
+ * Read the visual PNG template and return as base64 data URI.
+ */
+export function buildVisualAward(file: string): string {
+  const buf = readFileSync(resolve(ASSETS_DIR, file))
+  return `data:image/png;base64,${buf.toString('base64')}`
 }
 
 export const certificateRoutes: FastifyPluginAsync = async (fastify) => {
@@ -56,7 +96,7 @@ export const certificateRoutes: FastifyPluginAsync = async (fastify) => {
         certificate_type: type,
         certificate_url: `/v1/bots/${id}/certificate`,
         issued_at: cert.created_at,
-        signed_by: 'LUMIOI Instructor',
+        signed_by: 'LUMIOI',
       })
     }
 

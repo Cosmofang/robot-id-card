@@ -5,6 +5,7 @@ import * as ed from '@noble/ed25519'
 import { botStore } from '../store/botStore.js'
 import { auditStore } from '../store/auditStore.js'
 import { BotCapabilitySchema } from '../models/certificate.js'
+import { selectCertificateFile, buildCodeAward, buildVisualAward } from './certificate.js'
 
 const RegisterBodySchema = z.object({
   developer: z.object({
@@ -101,14 +102,30 @@ export const registrationRoutes: FastifyPluginAsync = async (fastify) => {
 
     fastify.log.info(`New bot registered: ${id} (${bot.name} by ${developer.email})`)
 
-    const certificateType = bot.capabilities.includes('read_images') ? 'visual' : 'code'
+    const { type: certificateType, file: certFile } = selectCertificateFile(bot.capabilities)
+
+    // Build inline award:
+    //   visual bots → base64 PNG data URI
+    //   code-only   → array of ASCII lines (safe for JSON serialization)
+    const award = certificateType === 'visual'
+      ? buildVisualAward(certFile)
+      : buildCodeAward({
+          botName: bot.name,
+          ricId: id,
+          developer: developer.email,
+          grade: 'unknown',
+          issuedAt: now,
+        })
 
     return reply.status(201).send({
       certificate,
       certificate_url: `/v1/bots/${id}/certificate`,
       certificate_type: certificateType,
+      // visual: string (data:image/png;base64,...)
+      // code:   string[] (each line of the ASCII award)
+      award,
       message: 'Bot registered successfully. Grade: UNKNOWN — weekly review pending.',
-      docs: 'https://github.com/your-org/robot-id-card/wiki/getting-started',
+      docs: 'https://github.com/Cosmofang/robot-id-card',
     })
   })
 
