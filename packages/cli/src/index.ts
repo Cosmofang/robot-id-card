@@ -3,7 +3,8 @@
  * RIC CLI — Developer tool for managing bot identities
  *
  * Usage:
- *   ric register  — Register a new bot
+ *   ric keygen    — Generate a new Ed25519 keypair (step 1)
+ *   ric register  — Register a new bot (step 2)
  *   ric status    — Check your bot's current grade
  *   ric verify    — Verify a bot by RIC ID
  *   ric report    — Report a bad bot
@@ -11,14 +12,44 @@
 
 import { Command } from 'commander'
 import * as ed from '@noble/ed25519'
+import { sha512 } from '@noble/hashes/sha2.js'
 import { randomBytes } from 'crypto'
 import * as fs from 'fs'
-import * as readline from 'readline'
+
+// @noble/ed25519 v2 requires sha512Sync to be set for Node.js
+ed.etc.sha512Sync = (...m) => sha512(...m)
 
 const REGISTRY = process.env.RIC_REGISTRY || 'https://registry.robotidcard.dev'
 
 const program = new Command()
-program.name('ric').description('Robot ID Card CLI').version('0.1.0')
+
+// ──────────────────────────────────────────────
+// ric keygen
+// ──────────────────────────────────────────────
+program
+  .command('keygen')
+  .description('Generate a new Ed25519 keypair for your bot')
+  .option('--out <file>', 'Output key file', './bot.key.json')
+  .action(async (opts) => {
+    const privateKey = randomBytes(32)
+    const publicKey = await ed.getPublicKey(privateKey)
+
+    const keyFile = {
+      private_key_hex: privateKey.toString('hex'),
+      public_key: `ed25519:${Buffer.from(publicKey).toString('hex')}`,
+      generated_at: new Date().toISOString(),
+    }
+
+    fs.writeFileSync(opts.out, JSON.stringify(keyFile, null, 2))
+
+    console.log(`\n🔑 New Ed25519 keypair generated`)
+    console.log(`   Public key: ${keyFile.public_key}`)
+    console.log(`   Saved to:   ${opts.out}`)
+    console.log(`\n⚠️  Keep ${opts.out} safe — it contains your private key!`)
+    console.log(`   Next step: ric register --key ${opts.out} --name "MyBot" ...`)
+  })
+
+program.name('ric').description('Robot ID Card CLI').version('0.2.0')
 
 // ──────────────────────────────────────────────
 // ric register
@@ -26,33 +57,54 @@ program.name('ric').description('Robot ID Card CLI').version('0.1.0')
 program
   .command('register')
   .description('Register a new bot and get your RIC certificate')
-  .option('--name <name>', 'Bot name')
-  .option('--purpose <purpose>', 'What your bot does (min 10 chars)')
-  .option('--developer <email>', 'Developer email')
+  .requiredOption('--name <name>', 'Bot name')
+  .requiredOption('--purpose <purpose>', 'What your bot does (min 10 chars)')
+  .requiredOption('--developer <email>', 'Developer email')
   .option('--org <org>', 'Organization name')
+  .option('--version <ver>', 'Bot version', '1.0.0')
+  .option('--capabilities <caps>', 'Comma-separated capabilities (read_articles,follow_links,...)', 'read_articles')
+  .option('--key <file>', 'Use existing key file from `ric keygen`')
   .option('--out <file>', 'Output certificate file', './bot.ric.json')
   .action(async (opts) => {
     console.log('\n🤖 Robot ID Card — Bot Registration\n')
 
-    // Generate Ed25519 keypair
-    const privateKey = randomBytes(32)
-    const publicKey = await ed.getPublicKey(privateKey)
-    const pubKeyHex = Buffer.from(publicKey).toString('hex')
+    // Load or generate keypair
+    let privateKeyHex: string
+    let publicKey: string
+
+    if (opts.key) {
+      if (!fs.existsSync(opts.key)) {
+        console.error(`Key file not found: ${opts.key}`)
+        console.error(`Generate one with: ric keygen --out ${opts.key}`)
+        process.exit(1)
+      }
+      const keyFile = JSON.parse(fs.readFileSync(opts.key, 'utf8'))
+      privateKeyHex = keyFile.private_key_hex
+      publicKey = keyFile.public_key
+    } else {
+      const privBytes = randomBytes(32)
+      const pubBytes = await ed.getPublicKey(privBytes)
+      privateKeyHex = privBytes.toString('hex')
+      publicKey = `ed25519:${Buffer.from(pubBytes).toString('hex')}`
+    }
+
+    const capabilities = opts.capabilities.split(',').map((c: string) => c.trim())
+    const botName = opts.name
 
     const payload = {
       developer: {
-        name: opts.developer?.split('@')[0] || 'Bot Developer',
-        email: opts.developer || '',
+        name: opts.developer.split('@')[0],
+        email: opts.developer,
         org: opts.org,
       },
       bot: {
-        name: opts.name || 'MyBot',
-        version: '1.0.0',
-        purpose: opts.purpose || 'General web assistant',
-        capabilities: ['read_articles'],
-        user_agent: `${opts.name || 'MyBot'}/1.0 (RIC:pending)`,
+        name: botName,
+        version: opts.version,
+        purpose: opts.purpose,
+        capabilities,
+        user_agent: `${botName}/${opts.version} (RIC:pending)`,
       },
-      public_key: `ed25519:${pubKeyHex}`,
+      public_key: publicKey,
     }
 
     try {
@@ -62,20 +114,22 @@ program
         body: JSON.stringify(payload),
       })
 
+      const data = await res.json() as any
+
       if (!res.ok) {
-        const err = await res.json()
-        console.error('Registration failed:', err)
+        if (res.status === 409) {
+          console.error(`\n❌ ${data.error}`)
+          if (data.existing_id) console.error(`   Existing RIC ID: ${data.existing_id}`)
+          if (data.hint) console.error(`   Hint: ${data.hint}`)
+        } else {
+          console.error('Registration failed:', data)
+        }
         process.exit(1)
       }
 
-      const { certificate } = await res.json()
+      const { certificate } = data
 
-      // Save full config (including private key) locally
-      const config = {
-        ...certificate,
-        private_key_hex: privateKey.toString('hex'),  // Keep safe!
-      }
-
+      const config = { ...certificate, private_key_hex: privateKeyHex }
       fs.writeFileSync(opts.out, JSON.stringify(config, null, 2))
 
       console.log(`✅ Bot registered successfully!\n`)
@@ -83,7 +137,6 @@ program
       console.log(`   Grade:       🟡 UNKNOWN (pending weekly review)`)
       console.log(`   Certificate: ${opts.out}`)
       console.log(`\n⚠️  Keep ${opts.out} safe — it contains your private key!`)
-      console.log(`\n📖 Next steps: https://robotidcard.dev/docs/getting-started`)
     } catch (e) {
       console.error('Failed to connect to registry:', e)
       process.exit(1)

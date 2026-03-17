@@ -1,4 +1,4 @@
-import type { RICVerifyResult } from './types'
+import type { RICVerifyResult } from './types.js'
 
 const DEFAULT_REGISTRY = 'https://registry.robotidcard.dev'
 

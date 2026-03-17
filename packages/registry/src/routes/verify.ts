@@ -1,15 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as ed from '@noble/ed25519'
-import { getPermissionLevel, PERMISSION_LABELS } from '../models/certificate'
-
-// Shared registry reference (would be DB in production)
-declare const registry: Map<string, any>
+import { getPermissionLevel, PERMISSION_LABELS } from '../models/certificate.js'
+import { botStore } from '../store/botStore.js'
 
 export const verifyRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * POST /v1/verify
-   * Verify a bot's request signature and return its permission level
-   *
+   * Verify a bot's request signature and return its permission level.
    * Websites call this endpoint to check if an incoming bot request is legitimate.
    */
   fastify.post('/', async (request, reply) => {
@@ -26,9 +23,7 @@ export const verifyRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(401).send({ error: 'Request expired', code: 'EXPIRED' })
     }
 
-    // Look up certificate
-    // (In production, this would hit the DB)
-    const cert = (global as any).__ricRegistry?.get(ric_id)
+    const cert = botStore.findById(ric_id)
     if (!cert) {
       return reply.status(404).send({
         error: 'Unknown RIC ID',
@@ -52,7 +47,7 @@ export const verifyRoutes: FastifyPluginAsync = async (fastify) => {
           permission_level: 0,
         })
       }
-    } catch (e) {
+    } catch {
       return reply.status(400).send({ error: 'Signature verification failed' })
     }
 

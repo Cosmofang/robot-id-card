@@ -2,6 +2,7 @@
   "name": "@robot-id-card/registry",
   "version": "0.1.0",
   "description": "Central registry server for Robot ID Card",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -10,19 +11,18 @@
     "test": "vitest"
   },
   "dependencies": {
-    "fastify": "^4.26.0",
-    "@fastify/cors": "^9.0.1",
-    "@fastify/rate-limit": "^9.1.0",
-    "drizzle-orm": "^0.30.0",
-    "better-sqlite3": "^9.4.3",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/rate-limit": "^10.3.0",
     "@noble/ed25519": "^2.1.0",
+    "better-sqlite3": "^12.8.0",
+    "fastify": "^5.8.2",
     "nanoid": "^5.0.6",
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
+    "@types/better-sqlite3": "^7.6.13",
     "tsx": "^4.7.0",
-    "vitest": "^1.3.0",
-    "@types/better-sqlite3": "^7.6.8"
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.0"
   }
 }

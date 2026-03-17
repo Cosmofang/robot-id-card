@@ -1,10 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { GradeSchema } from '../models/certificate'
+import { GradeSchema } from '../models/certificate.js'
+import { botStore } from '../store/botStore.js'
+import { auditStore } from '../store/auditStore.js'
 
 const ReportSchema = z.object({
   ric_id: z.string().startsWith('ric_'),
-  reporter_domain: z.string(),
+  reporter_domain: z.string().min(1),
   reason: z.enum([
     'spam',
     'scraping_violation',
@@ -18,16 +20,14 @@ const ReportSchema = z.object({
   description: z.string().max(1000),
 })
 
-// In-memory audit log for demo
-const auditLog: Array<{
-  id: string
-  ric_id: string
-  event: string
-  old_grade?: string
-  new_grade?: string
-  reason?: string
-  timestamp: string
-}> = []
+const GradeUpdateSchema = z.object({
+  ric_id: z.string().startsWith('ric_'),
+  grade: GradeSchema,
+  reason: z.string().min(1).max(500),
+  admin_key: z.string(),
+})
+
+const ADMIN_KEY = process.env.RIC_ADMIN_KEY || 'dev-admin-key-change-me'
 
 export const auditRoutes: FastifyPluginAsync = async (fastify) => {
   /**
@@ -42,35 +42,35 @@ export const auditRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { ric_id, reporter_domain, reason, description } = body.data
 
-    const entry = {
-      id: `report_${Date.now()}`,
+    // Verify the bot exists before accepting a report
+    const cert = botStore.findById(ric_id)
+    if (!cert) {
+      return reply.status(404).send({ error: 'Bot not found', ric_id })
+    }
+
+    const entry = auditStore.append({
       ric_id,
       event: 'violation_report',
       reason,
       reporter: reporter_domain,
       description,
-      timestamp: new Date().toISOString(),
-    }
+    })
 
-    auditLog.push(entry)
     fastify.log.warn(`Violation report for ${ric_id}: ${reason} from ${reporter_domain}`)
 
-    // Auto-flag as dangerous if 3+ reports in 24h (simplified logic)
-    const recentReports = auditLog.filter(
-      (e) => e.ric_id === ric_id &&
-      Date.now() - new Date(e.timestamp).getTime() < 24 * 60 * 60 * 1000
-    )
-
-    if (recentReports.length >= 3) {
-      auditLog.push({
-        id: `grade_change_${Date.now()}`,
+    // Auto-flag as dangerous if 3+ reports in 24h
+    const recentCount = botStore.countRecentReports(ric_id)
+    if (recentCount >= 3 && cert.grade !== 'dangerous') {
+      const oldGrade = cert.grade
+      botStore.updateGrade(ric_id, 'dangerous')
+      auditStore.append({
         ric_id,
         event: 'grade_changed',
-        old_grade: 'unknown',
+        old_grade: oldGrade,
         new_grade: 'dangerous',
-        reason: 'Auto-flagged: 3+ reports in 24h',
-        timestamp: new Date().toISOString(),
+        reason: `Auto-flagged: ${recentCount} violation reports in 24h`,
       })
+      fastify.log.warn(`Bot ${ric_id} auto-flagged as DANGEROUS`)
     }
 
     return reply.status(202).send({ message: 'Report submitted for review', report_id: entry.id })
@@ -82,35 +82,41 @@ export const auditRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get('/:ric_id', async (request, reply) => {
     const { ric_id } = request.params as { ric_id: string }
-    const log = auditLog.filter((e) => e.ric_id === ric_id)
-    return reply.send({ ric_id, total: log.length, events: log })
+    const events = auditStore.findByRicId(ric_id)
+    return reply.send({ ric_id, total: events.length, events })
   })
 
   /**
-   * POST /v1/audit/grade (admin only in production)
-   * Manually update a bot's grade after weekly review
+   * POST /v1/audit/grade
+   * Manually update a bot's grade after weekly review (requires admin key)
    */
   fastify.post('/grade', async (request, reply) => {
-    const { ric_id, grade, reason } = request.body as {
-      ric_id: string
-      grade: string
-      reason: string
+    const body = GradeUpdateSchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.status(400).send({ error: 'Invalid request', details: body.error.flatten() })
     }
 
-    const parsed = GradeSchema.safeParse(grade)
-    if (!parsed.success) {
-      return reply.status(400).send({ error: 'Invalid grade' })
+    const { ric_id, grade, reason, admin_key } = body.data
+
+    if (admin_key !== ADMIN_KEY) {
+      return reply.status(403).send({ error: 'Forbidden' })
     }
 
-    auditLog.push({
-      id: `grade_${Date.now()}`,
+    const cert = botStore.findById(ric_id)
+    if (!cert) {
+      return reply.status(404).send({ error: 'Bot not found', ric_id })
+    }
+
+    const oldGrade = cert.grade
+    botStore.updateGrade(ric_id, grade)
+    auditStore.append({
       ric_id,
       event: 'grade_changed',
+      old_grade: oldGrade,
       new_grade: grade,
       reason,
-      timestamp: new Date().toISOString(),
     })
 
-    return reply.send({ message: `Grade updated to ${grade}`, ric_id })
+    return reply.send({ message: `Grade updated to ${grade}`, ric_id, old_grade: oldGrade })
   })
 }

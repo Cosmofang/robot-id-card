@@ -2,62 +2,111 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { nanoid } from 'nanoid'
 import * as ed from '@noble/ed25519'
-import { RICCertificateSchema } from '../models/certificate'
+import { botStore } from '../store/botStore.js'
+import { auditStore } from '../store/auditStore.js'
+import { BotCapabilitySchema } from '../models/certificate.js'
 
 const RegisterBodySchema = z.object({
   developer: z.object({
-    name: z.string(),
+    name: z.string().min(1).max(128),
     email: z.string().email(),
-    org: z.string().optional(),
+    org: z.string().max(128).optional(),
     website: z.string().url().optional(),
   }),
   bot: z.object({
-    name: z.string(),
-    version: z.string(),
+    name: z.string().min(1).max(64),
+    version: z.string().regex(/^\d+\.\d+(\.\d+)?$/, 'version must be semver e.g. 1.0.0'),
     purpose: z.string().min(10).max(500),
-    capabilities: z.array(z.string()),
-    user_agent: z.string(),
+    capabilities: z.array(BotCapabilitySchema).min(1),
+    user_agent: z.string().min(1).max(256),
   }),
-  public_key: z.string().startsWith('ed25519:'),
+  public_key: z.string().startsWith('ed25519:').length(72), // 'ed25519:' (8) + 64 hex chars
 })
-
-// In-memory store for demo — replace with DB in production
-const registry = new Map<string, any>()
 
 export const registrationRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * POST /v1/bots/register
-   * Register a new bot and receive its RIC certificate
+   * Register a new bot and receive its RIC certificate.
+   *
+   * Uniqueness rules:
+   *   1. A public key can only be registered once (each keypair = one bot identity)
+   *   2. (email + bot name) combo must be unique — prevents duplicate registrations
    */
-  fastify.post('/register', async (request, reply) => {
+  fastify.post('/register', {
+    config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
+  }, async (request, reply) => {
     const body = RegisterBodySchema.safeParse(request.body)
     if (!body.success) {
       return reply.status(400).send({ error: 'Invalid request', details: body.error.flatten() })
     }
 
     const { developer, bot, public_key } = body.data
+
+    // ── Uniqueness check 1: public key ────────────────────
+    const existingByKey = botStore.findByPublicKey(public_key)
+    if (existingByKey) {
+      return reply.status(409).send({
+        error: 'Public key already registered',
+        code: 'DUPLICATE_KEY',
+        existing_id: existingByKey,
+        hint: 'Each bot must use a unique Ed25519 keypair. Generate a new key with `ric keygen`.',
+      })
+    }
+
+    // ── Uniqueness check 2: email + bot name ──────────────
+    const existingByName = botStore.findByEmailAndBotName(developer.email, bot.name)
+    if (existingByName) {
+      return reply.status(409).send({
+        error: 'A bot with this name is already registered for this developer account',
+        code: 'DUPLICATE_BOT',
+        existing_id: existingByName,
+        hint: 'Use `ric status` to retrieve your existing certificate, or choose a different bot name.',
+      })
+    }
+
+    // ── Validate public key is valid Ed25519 ──────────────
+    const pubKeyHex = public_key.replace('ed25519:', '')
+    try {
+      if (pubKeyHex.length !== 64 || !/^[0-9a-f]+$/i.test(pubKeyHex)) {
+        throw new Error('invalid hex')
+      }
+      // ed25519 public keys are always 32 bytes = 64 hex chars
+      Buffer.from(pubKeyHex, 'hex')
+    } catch {
+      return reply.status(400).send({
+        error: 'Invalid public key format',
+        code: 'INVALID_KEY',
+        hint: 'Public key must be a valid Ed25519 key in hex format prefixed with "ed25519:"',
+      })
+    }
+
     const id = `ric_${nanoid(16)}`
     const now = new Date().toISOString()
 
     const certificate = {
-      ric_version: '1.0',
+      ric_version: '1.0' as const,
       id,
       created_at: now,
       developer: { ...developer, verified: false },
-      bot,
-      grade: 'unknown',
+      bot: { ...bot },
+      grade: 'unknown' as const,
       grade_updated_at: now,
       public_key,
-      // Registry signs the certificate with its own private key in production
+      // Registry signature placeholder — in v0.3 this will be a real Ed25519 sig from registry key
       signature: `registry_sig_${nanoid(32)}`,
     }
 
-    registry.set(id, certificate)
+    botStore.insert(certificate)
+    auditStore.append({ ric_id: id, event: 'registered', reason: 'New bot registration' })
 
     fastify.log.info(`New bot registered: ${id} (${bot.name} by ${developer.email})`)
 
+    const certificateType = bot.capabilities.includes('read_images') ? 'visual' : 'code'
+
     return reply.status(201).send({
       certificate,
+      certificate_url: `/v1/bots/${id}/certificate`,
+      certificate_type: certificateType,
       message: 'Bot registered successfully. Grade: UNKNOWN — weekly review pending.',
       docs: 'https://github.com/your-org/robot-id-card/wiki/getting-started',
     })
@@ -69,7 +118,7 @@ export const registrationRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get('/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const cert = registry.get(id)
+    const cert = botStore.findById(id)
 
     if (!cert) {
       return reply.status(404).send({ error: 'Bot not found', id })
@@ -83,14 +132,7 @@ export const registrationRoutes: FastifyPluginAsync = async (fastify) => {
    * List all registered bots (public summary only)
    */
   fastify.get('/', async () => {
-    const bots = [...registry.values()].map(({ id, bot, grade, developer, created_at }) => ({
-      id,
-      name: bot.name,
-      purpose: bot.purpose,
-      grade,
-      developer_org: developer.org || developer.name,
-      created_at,
-    }))
+    const bots = botStore.listSummary()
     return { total: bots.length, bots }
   })
 }

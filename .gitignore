@@ -6,3 +6,6 @@ dist/
 .env.local
 *.db
 *.sqlite
+*.db-shm
+*.db-wal
+packages/registry/data/

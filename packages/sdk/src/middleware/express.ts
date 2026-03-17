@@ -12,8 +12,8 @@
  * }))
  */
 
-import { getRICHeaders, verifyRICRequest, meetsGradeRequirement } from '../verify'
-import type { RICMiddlewareOptions } from '../types'
+import { getRICHeaders, verifyRICRequest, meetsGradeRequirement } from '../verify.js'
+import type { RICMiddlewareOptions } from '../types.js'
 
 export function RICMiddleware(options: RICMiddlewareOptions = {}) {
   return async function ricMiddleware(req: any, res: any, next: () => void) {

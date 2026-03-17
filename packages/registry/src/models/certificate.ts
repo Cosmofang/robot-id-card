@@ -5,6 +5,7 @@ export type Grade = z.infer<typeof GradeSchema>
 
 export const BotCapabilitySchema = z.enum([
   'read_articles',
+  'read_images',
   'follow_links',
   'view_threads',
   'react',

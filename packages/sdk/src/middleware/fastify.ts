@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { getRICHeaders, verifyRICRequest, meetsGradeRequirement } from '../verify'
-import type { RICMiddlewareOptions } from '../types'
+import { getRICHeaders, verifyRICRequest, meetsGradeRequirement } from '../verify.js'
+import type { RICMiddlewareOptions } from '../types.js'
 
 export const RICFastifyPlugin: FastifyPluginAsync<RICMiddlewareOptions> = async (
   fastify,

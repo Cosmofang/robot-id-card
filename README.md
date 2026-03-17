@@ -6,6 +6,22 @@ Give your bot a passport. Let websites trust it.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Status: Early Development](https://img.shields.io/badge/Status-Early%20Development-orange.svg)]()
+
+---
+
+> [!WARNING]
+> **This project is in early development. It is not yet usable.**
+>
+> | Component | Status |
+> |-----------|--------|
+> | Protocol Spec | 🟡 Draft — certificate format & grade system defined |
+> | Registry Server | 🟡 Local scaffold done (in-memory store), not deployed |
+> | CLI Tool (`ric register`) | 🟡 Local scaffold done, not published to npm |
+> | Browser Extension | 🟡 Local scaffold done, not published to Chrome Web Store |
+> | Website SDK | 🟡 Local scaffold done, not published to npm |
+>
+> We are building in public. Contributions and feedback welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -214,11 +230,17 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). All contributions welcome:
 
 ## Roadmap
 
-- [ ] v0.1 — Core registry + certificate format spec
-- [ ] v0.2 — CLI tool for registration
-- [ ] v0.3 — JavaScript SDK for websites
-- [ ] v0.4 — Chrome/Firefox extension
-- [ ] v0.5 — Public registry dashboard
+- [x] v0.1 — Core registry + certificate format spec (models, grade system, permission levels)
+- [x] v0.1 — Registry server scaffold (Fastify, in-memory store, register/verify/audit routes)
+- [x] v0.1 — CLI tool scaffold (`ric` command)
+- [x] v0.1 — Browser extension scaffold (background + popup)
+- [x] v0.1 — Website SDK scaffold (middleware, verify)
+- [ ] v0.2 — Persistent storage (replace in-memory store with a real DB)
+- [ ] v0.2 — Publish CLI to npm (`@robot-id-card/cli`)
+- [ ] v0.2 — Publish SDK to npm (`@robot-id-card/sdk`)
+- [ ] v0.3 — Deploy public registry server
+- [ ] v0.3 — Publish browser extension to Chrome Web Store
+- [ ] v0.4 — Public registry dashboard (bot listing + audit log UI)
 - [ ] v1.0 — Decentralized registry (DID-based, no single point of failure)
 
 ---
