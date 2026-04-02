@@ -1,4 +1,5 @@
 import type { BotSummary, BotDetail, Grade } from './types.js'
+import type { AuditEvent } from './api.js'
 
 const GRADE_CONFIG: Record<Grade, { label: string; color: string; icon: string }> = {
   healthy:   { label: 'Healthy',   color: '#22c55e', icon: '✓' },
@@ -106,7 +107,44 @@ export function renderBotDetail(bot: BotDetail): string {
         <h4>User Agent</h4>
         <code class="user-agent">${escapeHtml(bot.bot.user_agent)}</code>
       </section>
+
+      <section class="detail-section">
+        <h4>Audit Log</h4>
+        <div id="audit-log-container">
+          <div class="audit-loading">
+            <div class="spinner" style="width:20px;height:20px;border-width:2px"></div>
+          </div>
+        </div>
+      </section>
     </div>`
+}
+
+const EVENT_LABELS: Record<string, { icon: string; label: string; color: string }> = {
+  registered:       { icon: '🆕', label: 'Registered',       color: '#6366f1' },
+  grade_changed:    { icon: '⚡', label: 'Grade Changed',     color: '#f59e0b' },
+  violation_report: { icon: '🚨', label: 'Violation Report',  color: '#ef4444' },
+}
+
+export function renderAuditLog(events: AuditEvent[]): string {
+  if (events.length === 0) {
+    return `<p style="color:var(--text-muted);font-size:0.875rem">No audit events recorded.</p>`
+  }
+  return `<ol class="audit-list">
+    ${events.map(e => {
+      const cfg = EVENT_LABELS[e.event] ?? { icon: '📋', label: e.event, color: '#64748b' }
+      const gradeChange = e.old_grade && e.new_grade
+        ? ` <span style="color:var(--text-muted)">${e.old_grade} → ${e.new_grade}</span>` : ''
+      return `<li class="audit-item">
+        <span class="audit-icon">${cfg.icon}</span>
+        <div class="audit-body">
+          <div class="audit-title" style="color:${cfg.color}">${cfg.label}${gradeChange}</div>
+          ${e.reason ? `<div class="audit-reason">${escapeHtml(e.reason)}</div>` : ''}
+          ${e.reporter ? `<div class="audit-meta">Reported by: ${escapeHtml(e.reporter)}</div>` : ''}
+          <div class="audit-meta">${new Date(e.timestamp).toLocaleString()}</div>
+        </div>
+      </li>`
+    }).join('')}
+  </ol>`
 }
 
 export function renderSkeleton(count = 6): string {

@@ -1,8 +1,9 @@
 import './style.css'
-import { fetchBots, fetchBot, type BotsResponse } from './api.js'
+import { fetchBots, fetchBot, fetchAuditLog, type BotsResponse } from './api.js'
 import {
   renderBotCard,
   renderBotDetail,
+  renderAuditLog,
   renderSkeleton,
   renderError,
   renderEmpty,
@@ -174,6 +175,15 @@ function bindEvents() {
         document.getElementById('back-btn')?.addEventListener('click', () => {
           currentView = 'list'
           renderApp()
+        })
+
+        // Async load audit log after detail renders
+        fetchAuditLog(id).then(log => {
+          const container = document.getElementById('audit-log-container')
+          if (container) container.innerHTML = renderAuditLog(log.events)
+        }).catch(() => {
+          const container = document.getElementById('audit-log-container')
+          if (container) container.innerHTML = `<p style="color:var(--text-muted);font-size:0.875rem">Audit log unavailable.</p>`
         })
       } catch (err) {
         main.innerHTML = renderError(`Failed to load bot details: ${err instanceof Error ? err.message : 'Unknown error'}`)
