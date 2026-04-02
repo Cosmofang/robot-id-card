@@ -24,7 +24,6 @@
     "@types/better-sqlite3": "^7.6.13",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0",
-    "vitest": "1.6.1",
-    "_comment_vitest": "Pin to 1.6.x — vitest v2+ uses rolldown native binary blocked by macOS SIP"
+    "vitest": "1.6.1"
   }
 }

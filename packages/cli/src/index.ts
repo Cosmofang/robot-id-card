@@ -17,7 +17,7 @@ import { randomBytes } from 'crypto'
 import * as fs from 'fs'
 
 // @noble/ed25519 v2 requires sha512Sync to be set for Node.js
-ed.etc.sha512Sync = (...m) => sha512(...m)
+ed.etc.sha512Sync = (...m: Parameters<typeof sha512>) => sha512(...m)
 
 const REGISTRY = process.env.RIC_REGISTRY || 'https://registry.robotidcard.dev'
 
