@@ -8,11 +8,14 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "test": "npm test --workspaces",
+    "test": "node node_modules/vitest/vitest.mjs run packages/registry/src packages/sdk/src",
     "dev:registry": "npm run dev --workspace=packages/registry",
     "typecheck": "tsc --noEmit"
   },
   "keywords": ["bot", "identity", "ai-agent", "security", "browser-extension"],
+  "overrides": {
+    "vitest": "1.6.1"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
