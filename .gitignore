@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.ric.json
 *.private.json
+*.key.json
 .env
 .env.local
 *.db

@@ -163,7 +163,8 @@
                   "fill": "#848484",
                   "content": "Universal Bot Identity — Officially Verified",
                   "fontFamily": "Inter",
-                  "fontSize": 13
+                  "fontSize": 13,
+                  "fontWeight": "normal"
                 }
               ]
             },
@@ -261,7 +262,8 @@
                           "fill": "#C9A962",
                           "content": "ric_pEw-aygriMWqSsjU",
                           "fontFamily": "JetBrains Mono",
-                          "fontSize": 13
+                          "fontSize": 13,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -290,7 +292,8 @@
                           "fill": "#FFFFFF",
                           "content": "dev@example.com",
                           "fontFamily": "Inter",
-                          "fontSize": 13
+                          "fontSize": 13,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -388,7 +391,8 @@
                           "fill": "#FFFFFF",
                           "content": "2026-03-17",
                           "fontFamily": "JetBrains Mono",
-                          "fontSize": 13
+                          "fontSize": 13,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -417,7 +421,8 @@
                           "fill": "#848484",
                           "content": "read_articles",
                           "fontFamily": "JetBrains Mono",
-                          "fontSize": 12
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -471,7 +476,8 @@
                       "fill": "#848484",
                       "content": "Congratulations on your Universal Robot Identity Certificate",
                       "fontFamily": "Cormorant Garamond",
-                      "fontSize": 14
+                      "fontSize": 14,
+                      "fontWeight": "normal"
                     },
                     {
                       "type": "frame",
@@ -493,7 +499,7 @@
                           "id": "GLnVk",
                           "name": "sigName",
                           "fill": "#C9A962",
-                          "content": "LUMIOI Instructor",
+                          "content": "LUMIOI",
                           "fontFamily": "Cormorant Garamond",
                           "fontSize": 16,
                           "fontWeight": "500"
@@ -643,7 +649,8 @@
               "fill": "#8B949E",
               "content": "certificate.ric.json",
               "fontFamily": "JetBrains Mono",
-              "fontSize": 12
+              "fontSize": 12,
+              "fontWeight": "normal"
             },
             {
               "type": "text",
@@ -652,7 +659,8 @@
               "fill": "#484F58",
               "content": "ric certificate --show",
               "fontFamily": "JetBrains Mono",
-              "fontSize": 11
+              "fontSize": 11,
+              "fontWeight": "normal"
             }
           ]
         },
@@ -936,7 +944,7 @@
                   "id": "y4EuK",
                   "name": "ln8c",
                   "fill": "#D2A8FF",
-                  "content": "  \"signed_by\":  \"LUMIOI Instructor\",",
+                  "content": "  \"signed_by\":  \"LUMIOI\",",
                   "fontFamily": "JetBrains Mono",
                   "fontSize": 12,
                   "fontWeight": "normal"
@@ -1101,7 +1109,7 @@
                       "id": "FaMTa",
                       "name": "aL9",
                       "fill": "#C9A962",
-                      "content": "✦  ·  ·  LUMIOI Instructor  ·  2026-03-17  ·  ·  ✦",
+                      "content": "  ✦  ·  ·  LUMIOI  ·  2026-03-17  ·  ·  ✦",
                       "fontFamily": "JetBrains Mono",
                       "fontSize": 12,
                       "fontWeight": "normal"
@@ -1191,7 +1199,7 @@
                       "id": "zzoLo",
                       "name": "verifyText",
                       "fill": "#3FB950",
-                      "content": "Signature verified · LUMIOI Instructor",
+                      "content": "Signature verified · LUMIOI",
                       "fontFamily": "JetBrains Mono",
                       "fontSize": 11,
                       "fontWeight": "normal"

@@ -5,7 +5,8 @@
   "description": "Carry your bot's RIC identity certificate in every web request",
   "permissions": [
     "storage",
-    "declarativeNetRequest"
+    "declarativeNetRequest",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>"

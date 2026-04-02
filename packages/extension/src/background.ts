@@ -1,8 +1,14 @@
 /**
- * RIC Browser Extension — Background Service Worker
+ * RIC Browser Extension — Background Service Worker (Manifest V3)
  *
- * Intercepts outgoing HTTP requests and injects RIC identity headers.
- * The bot's private key signs each request with a timestamp to prevent replay.
+ * Injects RIC identity headers into all outgoing HTTPS requests using
+ * chrome.declarativeNetRequest (MV3-compatible, replaces the MV2
+ * chrome.webRequest blocking approach).
+ *
+ * Strategy:
+ *   - Headers include a timestamp-based Ed25519 signature.
+ *   - chrome.alarms fires every REFRESH_MINUTES to regenerate the
+ *     signature, keeping it inside the registry's 5-minute replay window.
  */
 
 import * as ed from '@noble/ed25519'
@@ -13,56 +19,109 @@ interface RICConfig {
   certificate: object
 }
 
-// Load config from extension storage
+const HEADER_RULE_ID   = 1
+const REFRESH_ALARM    = 'ric-header-refresh'
+const REFRESH_MINUTES  = 4   // must stay < registry's 5-min replay window
+
+// ── Hex utilities (Buffer is not available in service workers) ─
+
+function hexToBytes(hex: string): Uint8Array {
+  const arr = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < hex.length; i += 2) {
+    arr[i / 2] = parseInt(hex.slice(i, i + 2), 16)
+  }
+  return arr
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+// ── Config ────────────────────────────────────────────────────
+
 async function getConfig(): Promise<RICConfig | null> {
   const result = await chrome.storage.local.get(['ricId', 'privateKeyHex', 'certificate'])
   if (!result.ricId || !result.privateKeyHex) return null
   return result as RICConfig
 }
 
-// Sign a request message with Ed25519 private key
-async function signRequest(privateKeyHex: string, ricId: string, url: string): Promise<{
-  timestamp: number
-  signature: string
-}> {
-  const timestamp = Date.now()
-  const message = `${ricId}:${timestamp}:${url}`
-  const msgBytes = new TextEncoder().encode(message)
-  const privKeyBytes = Buffer.from(privateKeyHex, 'hex')
-  const sig = await ed.sign(msgBytes, privKeyBytes)
-  return {
-    timestamp,
-    signature: Buffer.from(sig).toString('hex'),
+// ── Header injection ──────────────────────────────────────────
+
+/**
+ * Generate a fresh Ed25519 signature and update the declarativeNetRequest
+ * dynamic rule so all subsequent requests carry valid, unexpired headers.
+ */
+async function refreshHeaders(): Promise<void> {
+  const config = await getConfig()
+
+  if (!config) {
+    // Not configured — clear any existing inject rule
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [HEADER_RULE_ID],
+    })
+    return
   }
+
+  // Message format matches the registry's verify route:
+  //   "<ric_id>:<timestamp>:<message>"  — message is empty for header-level auth
+  const timestamp = Date.now()
+  const message   = `${config.ricId}:${timestamp}:`
+  const msgBytes  = new TextEncoder().encode(message)
+  const privBytes = hexToBytes(config.privateKeyHex)
+  const sigBytes  = await ed.sign(msgBytes, privBytes)
+  const sigHex    = bytesToHex(sigBytes)
+
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [HEADER_RULE_ID],
+    addRules: [
+      {
+        id: HEADER_RULE_ID,
+        priority: 1,
+        action: {
+          type: 'modifyHeaders' as chrome.declarativeNetRequest.RuleActionType,
+          requestHeaders: [
+            { header: 'X-RIC-ID',        operation: 'set' as chrome.declarativeNetRequest.HeaderOperation, value: config.ricId },
+            { header: 'X-RIC-Timestamp', operation: 'set' as chrome.declarativeNetRequest.HeaderOperation, value: String(timestamp) },
+            { header: 'X-RIC-Signature', operation: 'set' as chrome.declarativeNetRequest.HeaderOperation, value: sigHex },
+            { header: 'X-RIC-Version',   operation: 'set' as chrome.declarativeNetRequest.HeaderOperation, value: '1.0' },
+          ],
+        },
+        condition: {
+          urlFilter: '|https://',
+          resourceTypes: [
+            'xmlhttprequest' as chrome.declarativeNetRequest.ResourceType,
+            'main_frame'     as chrome.declarativeNetRequest.ResourceType,
+            'sub_frame'      as chrome.declarativeNetRequest.ResourceType,
+          ],
+        },
+      },
+    ],
+  })
 }
 
-// Intercept requests and inject RIC headers
-chrome.webRequest?.onBeforeSendHeaders.addListener(
-  async (details) => {
-    const config = await getConfig()
-    if (!config) return {}  // Not configured, don't inject
+// ── Lifecycle ─────────────────────────────────────────────────
 
-    const { timestamp, signature } = await signRequest(
-      config.privateKeyHex,
-      config.ricId,
-      details.url
-    )
+chrome.runtime.onInstalled.addListener(async () => {
+  await chrome.alarms.create(REFRESH_ALARM, { periodInMinutes: REFRESH_MINUTES })
+  await refreshHeaders()
+})
 
-    const headers = details.requestHeaders || []
-    headers.push(
-      { name: 'X-RIC-ID', value: config.ricId },
-      { name: 'X-RIC-Timestamp', value: String(timestamp) },
-      { name: 'X-RIC-Signature', value: signature },
-      { name: 'X-RIC-Version', value: '1.0' },
-    )
+chrome.runtime.onStartup.addListener(async () => {
+  // Re-create alarm in case it was cleared during browser restart
+  await chrome.alarms.create(REFRESH_ALARM, { periodInMinutes: REFRESH_MINUTES })
+  await refreshHeaders()
+})
 
-    return { requestHeaders: headers }
-  },
-  { urls: ['<all_urls>'] },
-  ['blocking', 'requestHeaders']
-)
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === REFRESH_ALARM) {
+    refreshHeaders()
+  }
+})
 
-// Listen for messages from popup
+// ── Messages from popup ───────────────────────────────────────
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'GET_STATUS') {
     getConfig().then((config) => {
@@ -72,7 +131,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === 'SAVE_CONFIG') {
-    chrome.storage.local.set(message.config).then(() => {
+    chrome.storage.local.set(message.config).then(async () => {
+      await refreshHeaders()
+      sendResponse({ success: true })
+    })
+    return true
+  }
+
+  if (message.type === 'CLEAR_CONFIG') {
+    chrome.storage.local.remove(['ricId', 'privateKeyHex', 'certificate']).then(async () => {
+      await refreshHeaders()   // clears the inject rule
       sendResponse({ success: true })
     })
     return true
