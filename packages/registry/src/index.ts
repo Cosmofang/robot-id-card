@@ -5,7 +5,7 @@ import * as ed from '@noble/ed25519'
 import { sha512 } from '@noble/hashes/sha2.js'
 
 // Required by @noble/ed25519 v2 in Node.js
-ed.etc.sha512Sync = (...m) => sha512(...m)
+ed.etc.sha512Sync = (...m: Parameters<typeof sha512>) => sha512(...m)
 import { registrationRoutes } from './routes/registration.js'
 import { verifyRoutes } from './routes/verify.js'
 import { auditRoutes } from './routes/audit.js'

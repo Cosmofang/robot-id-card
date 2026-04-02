@@ -6,22 +6,25 @@ Give your bot a passport. Let websites trust it.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![Status: Early Development](https://img.shields.io/badge/Status-Early%20Development-orange.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-45%20passing-brightgreen.svg)]()
+[![Status: Beta](https://img.shields.io/badge/Status-Beta-blue.svg)]()
 
 ---
 
-> [!WARNING]
-> **This project is in early development. It is not yet usable.**
->
-> | Component | Status |
-> |-----------|--------|
-> | Protocol Spec | 🟡 Draft — certificate format & grade system defined |
-> | Registry Server | 🟡 Local scaffold done (in-memory store), not deployed |
-> | CLI Tool (`ric register`) | 🟡 Local scaffold done, not published to npm |
-> | Browser Extension | 🟡 Local scaffold done, not published to Chrome Web Store |
-> | Website SDK | 🟡 Local scaffold done, not published to npm |
->
-> We are building in public. Contributions and feedback welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+## Component Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Protocol Spec | ✅ Draft v1 | Certificate format, grade system, permission levels |
+| Registry Server | ✅ Working | SQLite persistence, Ed25519 verify, claim streak |
+| CLI Tool | ✅ Built | `ric keygen / register / claim / status / report` |
+| Browser Extension | ✅ Built | Manifest V3, Service Worker, declarativeNetRequest |
+| Website SDK | ✅ Built | Express + Fastify middleware, grade-based auth |
+| Dashboard UI | ✅ Built | Bot registry browser, search, grade filters |
+| Tests | ✅ 45 passing | botStore, certificate model, SDK verify |
+| Deployed Registry | 🟡 Pending | Dockerfile + render.yaml ready |
+| npm Packages | 🟡 Pending | `npm login` required |
+| Chrome Extension | 🟡 Pending | Unpublished |
 
 ---
 
@@ -31,11 +34,11 @@ The internet has no way to distinguish a *good* bot from a *bad* one.
 
 - Websites block all bots out of fear (even useful AI assistants)
 - Bad bots have no accountability — they can't be traced or stopped
-- Good bots (like OpenClaw, research agents) get caught in the same blocklist as scrapers and spammers
+- Good bots (research agents, AI assistants) get caught in the same blocklist as scrapers and spammers
 
 ## The Solution: Robot ID Card
 
-A **cryptographically signed identity certificate** for bots, backed by a **public audit registry** and a **weekly health review system**.
+A **cryptographically signed identity certificate** for bots, backed by a **public audit registry** and a **daily claim streak system**.
 
 ```
 Bot registers → Gets signed certificate → Carries ID in every request
@@ -44,57 +47,93 @@ Website reads ID → Checks grade → Grants appropriate permissions
 
 ---
 
-## Identity Certificate Format
+## Identity Certificate
 
 ```json
 {
   "ric_version": "1.0",
-  "id": "ric_a3f8c2d1-...",
-  "created_at": "2024-01-15T10:00:00Z",
+  "id": "ric_a3f8c2d1_xyz12345",
+  "created_at": "2026-01-15T10:00:00Z",
   "developer": {
     "name": "Jane Smith",
     "email": "jane@example.com",
     "org": "ExampleAI Inc.",
     "website": "https://example.com",
-    "verified": true
+    "verified": false
   },
   "bot": {
-    "name": "OpenClaw",
-    "version": "2.1.0",
+    "name": "ResearchBot",
+    "version": "1.0.0",
     "purpose": "Web research assistant for academic users",
     "capabilities": ["read_articles", "follow_links"],
-    "user_agent": "OpenClaw/2.1 (RIC:ric_a3f8c2d1)"
+    "user_agent": "ResearchBot/1.0 (RIC:ric_a3f8c2d1_xyz12345)"
   },
   "grade": "healthy",
-  "grade_updated_at": "2024-01-20T00:00:00Z",
-  "public_key": "ed25519:abc123...",
+  "public_key": "ed25519:a3f8c2d1...",
   "signature": "..."
 }
 ```
+
+The RIC ID embeds the first 8 hex chars of the public key fingerprint — identity is permanently woven into the ID: `ric_{fp8}_{rand8}`.
 
 ---
 
 ## Grade System
 
-| Grade | Badge | Meaning | Review Cycle |
-|-------|-------|---------|-------------|
-| 🟢 Healthy | `HEALTHY` | Verified, no risk behavior | Weekly |
-| 🟡 Unknown | `UNKNOWN` | Newly registered, under review | Upon registration |
-| 🔴 Dangerous | `DANGEROUS` | Risk behavior recorded | Immediate flagging |
+| Grade | Meaning | How to Achieve |
+|-------|---------|---------------|
+| 🟡 Unknown | Newly registered | Default on registration |
+| 🟢 Healthy | Trusted | 3+ consecutive daily `ric claim` calls |
+| 🔴 Dangerous | Flagged | 3+ violation reports within 24h → auto-block |
 
 ---
 
-## Permission Levels (for Websites)
-
-Websites can use bot grade to gate features progressively:
+## Permission Levels
 
 ```
-Level 0 — ❌ Blocked        (Dangerous bots)
-Level 1 — 📄 Read articles  (Unknown / all verified bots)
-Level 2 — 👁  View threads   (Healthy, basic)
-Level 3 — 👍 Like / react   (Healthy, intermediate)
-Level 4 — ✏️  Post content   (Healthy, verified developer)
-Level 5 — 💬 Direct chat    (Trusted Healthy, long track record)
+Level 0 — Blocked        (Dangerous bots)
+Level 1 — Read articles  (Unknown + all verified bots)
+Level 2 — View threads   (Healthy, read_articles/view_threads)
+Level 3 — Like / react   (Healthy, react capability)
+Level 4 — Post content   (Healthy, post_content capability)
+Level 5 — Direct chat    (Healthy, direct_chat capability)
+```
+
+---
+
+## Quick Start
+
+### Register your bot (CLI)
+
+```bash
+npm install -g @robot-id-card/cli
+
+ric keygen --output my-bot.key.json
+ric register --key my-bot.key.json
+ric claim --key my-bot.key.json   # Run daily to build trust streak
+```
+
+### Verify bots on your website (SDK)
+
+```typescript
+import { ricMiddleware } from '@robot-id-card/sdk/middleware/express'
+
+// Block unverified bots on write routes
+app.use('/api/post', ricMiddleware({ minGrade: 'healthy', requiredPermissionLevel: 4 }))
+```
+
+### Run registry locally
+
+```bash
+npm install
+npm run dev:registry   # Starts on localhost:3000
+```
+
+### Browse registered bots (Dashboard)
+
+```bash
+cd packages/dashboard
+npm run dev            # Starts on localhost:5173
 ```
 
 ---
@@ -102,146 +141,94 @@ Level 5 — 💬 Direct chat    (Trusted Healthy, long track record)
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    RIC Ecosystem                         │
-│                                                          │
-│  ┌──────────────┐    ┌───────────────────────────────┐  │
-│  │  Bot/Agent   │    │       RIC Registry             │  │
-│  │              │    │  - Identity storage            │  │
-│  │ ┌──────────┐ │    │  - Certificate issuance        │  │
-│  │ │ Extension│◄├────┤  - Audit logs                  │  │
-│  │ │ (carries │ │    │  - Grade management            │  │
-│  │ │  the ID) │ │    └───────────────┬───────────────┘  │
-│  │ └──────────┘ │                    │                   │
-│  └──────┬───────┘                    │                   │
-│         │ HTTP Header:               │                   │
-│         │ X-RIC-ID: ric_abc123       │                   │
-│         │ X-RIC-Sig: <signature>     │                   │
-│         ▼                            ▼                   │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │              Website / Platform                   │   │
-│  │                                                   │   │
-│  │  ┌────────────┐  verifies  ┌──────────────────┐  │   │
-│  │  │  RIC SDK   ├────────────► Registry API      │  │   │
-│  │  │ middleware │            └──────────────────┘  │   │
-│  │  └─────┬──────┘                                  │   │
-│  │        │ grants permission level 0-5             │   │
-│  │        ▼                                         │   │
-│  │  [Your App Logic]                                │   │
-│  └──────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                      RIC Ecosystem                        │
+│                                                           │
+│  ┌──────────────┐    ┌──────────────────────────────┐    │
+│  │  Bot/Agent   │    │       RIC Registry            │    │
+│  │  (CLI tool)  │    │  SQLite · Ed25519 · Fastify   │    │
+│  │              │◄───┤  /v1/bots/register            │    │
+│  │ Browser Ext  │    │  /v1/bots/:id/claim           │    │
+│  │ injects hdrs │    │  /v1/verify                   │    │
+│  └──────┬───────┘    │  /v1/audit/report             │    │
+│         │            └──────────────┬────────────────┘    │
+│  X-RIC-ID: ric_...                  │                     │
+│  X-RIC-Timestamp: ...               │ Dashboard UI        │
+│  X-RIC-Signature: ...               │ lists all bots      │
+│         ▼                           ▼                     │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │           Website / Platform (SDK)                │    │
+│  │  ricMiddleware({ minGrade: 'healthy' })           │    │
+│  │  → verifies signature → grants permission 0–5    │    │
+│  └──────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| [`packages/registry`](packages/registry) | Central registry server (Node.js + Fastify) |
-| [`packages/extension`](packages/extension) | Browser extension for bots (Chrome/Firefox) |
-| [`packages/sdk`](packages/sdk) | Website integration SDK (JS/TS) |
-| [`packages/cli`](packages/cli) | CLI tool for bot developers |
+| Package | Description | Publish |
+|---------|-------------|---------|
+| [`packages/registry`](packages/registry) | Central registry server (Fastify + SQLite) | Docker / Render |
+| [`packages/cli`](packages/cli) | Developer CLI (`ric` command) | `@robot-id-card/cli` |
+| [`packages/sdk`](packages/sdk) | Website integration SDK | `@robot-id-card/sdk` |
+| [`packages/extension`](packages/extension) | Chrome extension (MV3) | Chrome Web Store |
+| [`packages/dashboard`](packages/dashboard) | Public bot browser UI (Vite) | Netlify / Vercel |
 
 ---
 
-## Quick Start
+## Deploy
 
-### For Bot Developers
+### Registry (Render.com)
+
+1. Connect this repo to [Render.com](https://render.com)
+2. Render auto-detects `render.yaml` and creates the service
+3. A persistent 1GB disk is mounted at `/data` for SQLite
+
+### Dashboard (Netlify)
+
+1. Connect `packages/dashboard` to Netlify
+2. `netlify.toml` is pre-configured (build: `npm run build`, publish: `dist`)
+3. Set `VITE_REGISTRY_URL` to your deployed registry URL
+
+---
+
+## Security
+
+- **Ed25519 signatures** — every request signed with bot's private key
+- **Replay protection** — 5-minute timestamp window
+- **Auto-flagging** — 3+ violation reports within 24h → instant `dangerous` grade
+- **Public audit log** — all grade changes recorded in `audit_log` table
+
+---
+
+## Tests
 
 ```bash
-# Install CLI
-npm install -g @robot-id-card/cli
-
-# Register your bot
-ric register --name "MyBot" --purpose "Research assistant" --developer "you@email.com"
-
-# Output: Your RIC ID: ric_a3f8c2d1-...
-#         Certificate saved to: ./mybot.ric.json
-#         Public key: ed25519:abc123...
+npm test   # 45 tests — botStore, certificate model, SDK verify
 ```
-
-### For Websites (SDK)
-
-```bash
-npm install @robot-id-card/sdk
-```
-
-```javascript
-import { RICMiddleware } from '@robot-id-card/sdk';
-
-// Express.js example
-app.use(RICMiddleware({
-  // Minimum grade required for different routes
-  permissions: {
-    '/api/read':    { minGrade: 'unknown',  level: 1 },
-    '/api/post':    { minGrade: 'healthy',  level: 4 },
-    '/api/chat':    { minGrade: 'healthy',  level: 5, minAge: '90d' },
-  },
-  onBotDetected: (ricInfo) => {
-    console.log(`Bot ${ricInfo.bot.name} (${ricInfo.grade}) accessed the site`);
-  }
-}));
-```
-
-### For Bots Using the Extension
-
-The browser extension injects identity headers automatically:
-
-```
-X-RIC-ID: ric_a3f8c2d1-4b5e-...
-X-RIC-Timestamp: 1705312800
-X-RIC-Signature: ed25519:abcdef...
-```
-
----
-
-## Security Design
-
-- **Ed25519 signatures**: Every request is signed with the bot's private key
-- **Replay protection**: Timestamp-based nonce prevents request replay
-- **Tamper-proof**: Registry stores public keys; signatures are verified server-side
-- **Revocation**: Dangerous bots get their certificates revoked immediately
-- **Transparency log**: All grade changes are publicly auditable
-
----
-
-## Audit Process
-
-The weekly review checks:
-- [ ] Rate limiting violations
-- [ ] TOS violation reports from websites
-- [ ] Abnormal traffic patterns
-- [ ] Developer contact reachability
-- [ ] Declared purpose vs. actual behavior (via site reports)
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). All contributions welcome:
-- Core protocol spec
-- New language SDKs (Python, Go, Ruby...)
-- Browser extension improvements
-- Registry infrastructure
-- Audit tooling
 
 ---
 
 ## Roadmap
 
-- [x] v0.1 — Core registry + certificate format spec (models, grade system, permission levels)
-- [x] v0.1 — Registry server scaffold (Fastify, in-memory store, register/verify/audit routes)
-- [x] v0.1 — CLI tool scaffold (`ric` command)
-- [x] v0.1 — Browser extension scaffold (background + popup)
-- [x] v0.1 — Website SDK scaffold (middleware, verify)
-- [ ] v0.2 — Persistent storage (replace in-memory store with a real DB)
-- [ ] v0.2 — Publish CLI to npm (`@robot-id-card/cli`)
-- [ ] v0.2 — Publish SDK to npm (`@robot-id-card/sdk`)
-- [ ] v0.3 — Deploy public registry server
-- [ ] v0.3 — Publish browser extension to Chrome Web Store
-- [ ] v0.4 — Public registry dashboard (bot listing + audit log UI)
-- [ ] v1.0 — Decentralized registry (DID-based, no single point of failure)
+- [x] v0.1 — Protocol spec, registry scaffold, CLI, SDK, extension
+- [x] v0.2 — SQLite persistence, certificate issuance, daily claim streak, auto-block
+- [x] v0.3 — Extension MV3, Dashboard UI, 45 unit tests, Dockerfile, npm publish config
+- [ ] v0.4 — Deploy public registry, publish CLI+SDK to npm, Chrome Web Store submission
+- [ ] v0.5 — Dashboard: violation reports UI, public audit log browser
+- [ ] v1.0 — Decentralized registry (DID-based)
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Help wanted:
+- Python / Go / Ruby SDK
+- Firefox extension support
+- Automated behavior audit tooling
+- Dashboard: audit log viewer
 
 ---
 
