@@ -26,7 +26,7 @@ await server.register(claimRoutes, { prefix: '/v1/bots' })
 await server.register(verifyRoutes, { prefix: '/v1/verify' })
 await server.register(auditRoutes, { prefix: '/v1/audit' })
 
-server.get('/health', async () => ({ status: 'ok', version: '0.2.0' }))
+server.get('/health', async () => ({ status: 'ok', version: '0.3.0' }))
 
 try {
   await server.listen({ port: PORT, host: '0.0.0.0' })

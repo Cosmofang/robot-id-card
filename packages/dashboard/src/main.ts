@@ -1,5 +1,5 @@
 import './style.css'
-import { fetchBots, fetchBot } from './api.js'
+import { fetchBots, fetchBot, type BotsResponse } from './api.js'
 import {
   renderBotCard,
   renderBotDetail,
@@ -12,6 +12,9 @@ import type { BotSummary } from './types.js'
 // ── App state ────────────────────────────────────────────────────────────────
 
 let allBots: BotSummary[] = []
+let totalBots = 0
+let currentPage = 1
+let totalPages = 1
 let searchQuery = ''
 let currentView: 'list' | 'detail' = 'list'
 
@@ -75,7 +78,7 @@ function renderListView(): string {
       </div>
 
       <div class="stats-bar">
-        <span>${allBots.length} registered bots</span>
+        <span>${totalBots} registered bots</span>
         <span>${allBots.filter(b => b.grade === 'healthy').length} healthy</span>
         <span>${allBots.filter(b => b.grade === 'dangerous').length} flagged</span>
       </div>
@@ -83,6 +86,13 @@ function renderListView(): string {
       <div class="bot-grid" id="bot-grid">
         ${renderGrid(filtered)}
       </div>
+
+      ${totalPages > 1 ? `
+      <div class="pagination" id="pagination">
+        <button class="page-btn" id="prev-page" ${currentPage <= 1 ? 'disabled' : ''}>← Prev</button>
+        <span class="page-info">Page ${currentPage} / ${totalPages}</span>
+        <button class="page-btn" id="next-page" ${currentPage >= totalPages ? 'disabled' : ''}>Next →</button>
+      </div>` : ''}
     </div>`
 }
 
@@ -129,6 +139,14 @@ function bindEvents() {
     if (grid) grid.innerHTML = renderGrid(filterBots(allBots, searchQuery, activeGrade))
   })
 
+  // Pagination
+  document.getElementById('prev-page')?.addEventListener('click', async () => {
+    if (currentPage > 1) { currentPage--; await loadPage() }
+  })
+  document.getElementById('next-page')?.addEventListener('click', async () => {
+    if (currentPage < totalPages) { currentPage++; await loadPage() }
+  })
+
   // Grade filters
   document.querySelectorAll<HTMLButtonElement>('.filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -170,6 +188,22 @@ function bindEvents() {
   })
 }
 
+// ── Data loading ─────────────────────────────────────────────────────────────
+
+async function loadPage() {
+  const main = document.getElementById('main-content') || document.querySelector('.main-content')!
+  if (main) {
+    const grid = main.querySelector('.bot-grid')
+    if (grid) grid.innerHTML = renderSkeleton(6)
+  }
+
+  const data: BotsResponse = await fetchBots({ page: currentPage, limit: 50 })
+  allBots = data.bots
+  totalBots = data.total
+  totalPages = data.pages
+  renderApp()
+}
+
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
 async function init() {
@@ -193,16 +227,13 @@ async function init() {
     </main>`
 
   try {
-    allBots = await fetchBots()
+    await loadPage()
   } catch {
     app.querySelector('.main-content')!.innerHTML = renderError(
       'Could not connect to the registry. Is the registry server running?'
     )
     document.getElementById('retry-btn')?.addEventListener('click', init)
-    return
   }
-
-  renderApp()
 }
 
 init()

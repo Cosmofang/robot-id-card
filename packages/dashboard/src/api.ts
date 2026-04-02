@@ -2,11 +2,23 @@ import type { BotSummary, BotDetail } from './types.js'
 
 const REGISTRY_URL = import.meta.env.VITE_REGISTRY_URL || 'http://localhost:3000'
 
-export async function fetchBots(): Promise<BotSummary[]> {
-  const res = await fetch(`${REGISTRY_URL}/v1/bots`)
+export interface BotsResponse {
+  total: number
+  page: number
+  limit: number
+  pages: number
+  bots: BotSummary[]
+}
+
+export async function fetchBots(params?: { grade?: string; page?: number; limit?: number }): Promise<BotsResponse> {
+  const qs = new URLSearchParams()
+  if (params?.grade) qs.set('grade', params.grade)
+  if (params?.page) qs.set('page', String(params.page))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  const query = qs.toString() ? `?${qs}` : ''
+  const res = await fetch(`${REGISTRY_URL}/v1/bots${query}`)
   if (!res.ok) throw new Error(`Registry error: ${res.status}`)
-  const data = await res.json()
-  return data.bots as BotSummary[]
+  return res.json()
 }
 
 export async function fetchBot(id: string): Promise<BotDetail> {

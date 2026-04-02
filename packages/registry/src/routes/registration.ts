@@ -148,11 +148,34 @@ export const registrationRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
-   * GET /v1/bots
-   * List all registered bots (public summary only)
+   * GET /v1/bots?grade=healthy&page=1&limit=50
+   * List registered bots with optional grade filter and pagination
    */
-  fastify.get('/', async () => {
-    const bots = botStore.listSummary()
-    return { total: bots.length, bots }
+  fastify.get('/', async (request) => {
+    const { grade, page = '1', limit = '50' } = request.query as {
+      grade?: string
+      page?: string
+      limit?: string
+    }
+
+    let bots = botStore.listSummary()
+
+    if (grade && ['unknown', 'healthy', 'dangerous'].includes(grade)) {
+      bots = bots.filter((b) => b.grade === grade)
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1)
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50))
+    const total = bots.length
+    const start = (pageNum - 1) * limitNum
+    const paged = bots.slice(start, start + limitNum)
+
+    return {
+      total,
+      page: pageNum,
+      limit: limitNum,
+      pages: Math.ceil(total / limitNum),
+      bots: paged,
+    }
   })
 }

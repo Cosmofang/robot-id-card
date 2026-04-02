@@ -418,6 +418,30 @@ code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85em;
   color: #a5b4fc;
 }
 
+/* ── Pagination ───────────────────────────────────────────── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 32px;
+  padding: 16px 0;
+}
+.page-btn {
+  padding: 8px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.page-info { color: var(--text-muted); font-size: 0.875rem; }
+
 /* ── Footer ───────────────────────────────────────────────── */
 .site-footer {
   text-align: center;

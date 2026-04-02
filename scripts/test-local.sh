@@ -33,7 +33,7 @@ section "0. Registry 健康检查"
 # ─────────────────────────────────────────────────────────────
 HEALTH=$(get /health)
 VERSION=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])" 2>/dev/null)
-if [[ "$VERSION" == "0.2.0" ]]; then
+if [[ "$VERSION" == "0.3.0" ]]; then
   pass "Registry 运行正常 (v$VERSION)"
 else
   fail "Registry 未响应或版本不对: $HEALTH"
@@ -44,7 +44,7 @@ fi
 # ─────────────────────────────────────────────────────────────
 section "1. CLI keygen — 生成密钥对"
 # ─────────────────────────────────────────────────────────────
-cd /Users/zezedabaobei/Desktop/robot-id-card
+cd "$(dirname "$0")/.."
 KEY_FILE="$TMP/bot.key.json"
 npx tsx packages/cli/src/index.ts keygen --out "$KEY_FILE" > /dev/null 2>&1
 if [[ -f "$KEY_FILE" ]]; then
