@@ -6,7 +6,7 @@ Give your bot a passport. Let websites trust it.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![Tests](https://img.shields.io/badge/Tests-45%20passing-brightgreen.svg)]()
+[![CI](https://github.com/Cosmofang/robot-id-card/actions/workflows/ci.yml/badge.svg)](https://github.com/Cosmofang/robot-id-card/actions/workflows/ci.yml)
 [![Status: Beta](https://img.shields.io/badge/Status-Beta-blue.svg)]()
 
 ---
@@ -25,6 +25,30 @@ Give your bot a passport. Let websites trust it.
 | Deployed Registry | 🟡 Pending | Dockerfile + render.yaml ready |
 | npm Packages | 🟡 Pending | `npm login` required |
 | Chrome Extension | 🟡 Pending | Unpublished |
+
+---
+
+## Quick Start
+
+```bash
+# Clone and install
+git clone https://github.com/Cosmofang/robot-id-card.git
+cd robot-id-card
+npm install
+
+# Build all packages
+npm run build
+
+# Start registry server (dev mode)
+npm run dev:registry
+
+# Generate a bot keypair
+cd packages/cli && npx tsx src/index.ts keygen
+
+# Register your bot
+npx tsx src/index.ts register --name "MyBot" --email "dev@example.com" \
+  --bot-name "MyBot" --purpose "Web research" --key ./my-bot.key.json
+```
 
 ---
 

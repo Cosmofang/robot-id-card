@@ -1,7 +1,9 @@
 {
   "name": "@robot-id-card/registry",
-  "version": "0.1.0",
-  "description": "Central registry server for Robot ID Card",
+  "version": "0.2.0",
+  "description": "Central registry server for Robot ID Card — SQLite-backed bot identity database with Ed25519 verification",
+  "homepage": "https://github.com/Cosmofang/robot-id-card",
+  "repository": { "type": "git", "url": "https://github.com/Cosmofang/robot-id-card", "directory": "packages/registry" },
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
