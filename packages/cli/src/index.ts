@@ -49,7 +49,7 @@ program
     console.log(`   Next step: ric register --key ${opts.out} --name "MyBot" ...`)
   })
 
-program.name('ric').description('Robot ID Card CLI').version('0.2.0')
+program.name('ric').description('Robot ID Card CLI').version('0.4.0')
 
 // ──────────────────────────────────────────────
 // ric register
@@ -265,6 +265,74 @@ program
       console.error('Failed to connect to registry:', e)
       process.exit(1)
     }
+  })
+
+// ──────────────────────────────────────────────
+// ric sign  (RFC 9421 — Web Bot Auth standard)
+// ──────────────────────────────────────────────
+program
+  .command('sign')
+  .description('Generate RFC 9421-compliant Signature + Signature-Input + Signature-Agent headers')
+  .requiredOption('--cert <file>', 'Certificate file from `ric register`', './bot.ric.json')
+  .requiredOption('--authority <authority>', 'Target host, e.g. "example.com"')
+  .option('--method <method>', 'HTTP method', 'GET')
+  .option('--path <path>', 'Request path, e.g. "/api/articles"', '/')
+  .option('--label <label>', 'Signature label (default: ric)', 'ric')
+  .option('--ttl <seconds>', 'Signature lifetime in seconds', '300')
+  .action(async (opts) => {
+    if (!fs.existsSync(opts.cert)) {
+      console.error(`Certificate file not found: ${opts.cert}`)
+      process.exit(1)
+    }
+
+    const cert = JSON.parse(fs.readFileSync(opts.cert, 'utf8'))
+    const { id, private_key_hex } = cert
+
+    if (!id || !private_key_hex) {
+      console.error('Invalid certificate file — missing id or private_key_hex')
+      process.exit(1)
+    }
+
+    const createdSec = Math.floor(Date.now() / 1000)
+    const expiresSec = createdSec + parseInt(opts.ttl, 10)
+    const nonce      = randomBytes(16).toString('base64url')
+    const label      = opts.label
+    const components = ['@authority', '@method', '@path']
+
+    // Build signature params (the part after "label=" in Signature-Input)
+    const sigInputParams = [
+      `(${components.map((c) => `"${c}"`).join(' ')})`,
+      `keyid="${id}"`,
+      `created=${createdSec}`,
+      `expires=${expiresSec}`,
+      `nonce="${nonce}"`,
+      `tag="web-bot-auth"`,
+    ].join(';')
+
+    // Build signature base (what gets signed)
+    const sigBase = [
+      `"@authority": ${opts.authority}`,
+      `"@method": ${opts.method.toUpperCase()}`,
+      `"@path": ${opts.path}`,
+      `"@signature-params": ${sigInputParams}`,
+    ].join('\n')
+
+    const msgBytes  = new TextEncoder().encode(sigBase)
+    const privBytes = Buffer.from(private_key_hex, 'hex')
+    const sigBytes  = await ed.sign(msgBytes, privBytes)
+    const sigB64    = Buffer.from(sigBytes).toString('base64')
+
+    const signatureInput = `${label}=${sigInputParams}`
+    const signature      = `${label}=:${sigB64}:`
+    const signatureAgent = `"${cert.bot?.name ?? 'RIC-Bot'}"; cert="${REGISTRY}/v1/bots/${id}"`
+
+    console.log('\n── RFC 9421 Request Headers ─────────────────────────────')
+    console.log(`Signature-Input: ${signatureInput}`)
+    console.log(`Signature: ${signature}`)
+    console.log(`Signature-Agent: ${signatureAgent}`)
+    console.log('─────────────────────────────────────────────────────────\n')
+    console.log('Signature base (for debugging):')
+    console.log(sigBase)
   })
 
 program.parse()

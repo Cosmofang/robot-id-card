@@ -15,11 +15,11 @@ Give your bot a passport. Let websites trust it.
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Protocol Spec | ✅ Draft v1 | Certificate format, grade system, permission levels |
-| Registry Server | ✅ Working | SQLite persistence, Ed25519 verify, claim streak |
-| CLI Tool | ✅ Built | `ric keygen / register / claim / status / report` |
-| Browser Extension | ✅ Built | Manifest V3, Service Worker, declarativeNetRequest |
-| Website SDK | ✅ Built | Express + Fastify middleware, grade-based auth |
+| Protocol Spec | ✅ v2.0 | RFC 9421 + Web Bot Auth aligned; legacy v1 still supported |
+| Registry Server | ✅ Working | SQLite, Ed25519, nonce tracking, JWKS well-known endpoint |
+| CLI Tool | ✅ Built | `ric keygen / register / claim / status / report / sign` |
+| Browser Extension | ✅ Built | Manifest V3, RFC 9421 headers, declarativeNetRequest |
+| Website SDK | ✅ Built | Express + Fastify middleware, RFC 9421 + legacy dual-mode |
 | Dashboard UI | ✅ Built | Bot registry browser, search, grade filters |
 | Tests | ✅ 45 passing | botStore, certificate model, SDK verify |
 | Deployed Registry | 🟡 Pending | Dockerfile + render.yaml ready |
@@ -65,9 +65,11 @@ The internet has no way to distinguish a *good* bot from a *bad* one.
 A **cryptographically signed identity certificate** for bots, backed by a **public audit registry** and a **daily claim streak system**.
 
 ```
-Bot registers → Gets signed certificate → Carries ID in every request
-Website reads ID → Checks grade → Grants appropriate permissions
+Bot registers → Gets signed certificate → Carries RFC 9421 headers in every request
+Website reads headers → Registry verifies signature → Grants appropriate permissions
 ```
+
+> **Standards aligned:** RIC v2.0 uses [RFC 9421 HTTP Message Signatures](https://www.rfc-editor.org/rfc/rfc9421) and is compatible with [Cloudflare Web Bot Auth](https://developers.cloudflare.com/bots/reference/bot-verification/web-bot-auth/) — the same standard adopted by OpenAI, AWS WAF, Visa, and Mastercard for AI agent authentication.
 
 ---
 
@@ -176,9 +178,9 @@ npm run dev            # Starts on localhost:5173
 │  │ injects hdrs │    │  /v1/verify                   │    │
 │  └──────┬───────┘    │  /v1/audit/report             │    │
 │         │            └──────────────┬────────────────┘    │
-│  X-RIC-ID: ric_...                  │                     │
-│  X-RIC-Timestamp: ...               │ Dashboard UI        │
-│  X-RIC-Signature: ...               │ lists all bots      │
+│  Signature-Input: ric=(...);keyid=  │                     │
+│  Signature: ric=:<base64>:          │ Dashboard UI        │
+│  Signature-Agent: "Bot"; cert=...   │ lists all bots      │
 │         ▼                           ▼                     │
 │  ┌──────────────────────────────────────────────────┐    │
 │  │           Website / Platform (SDK)                │    │
@@ -240,8 +242,9 @@ npm test   # 45 tests — botStore, certificate model, SDK verify
 - [x] v0.1 — Protocol spec, registry scaffold, CLI, SDK, extension
 - [x] v0.2 — SQLite persistence, certificate issuance, daily claim streak, auto-block
 - [x] v0.3 — Extension MV3, Dashboard UI, 45 unit tests, Dockerfile, npm publish config
-- [ ] v0.4 — Deploy public registry, publish CLI+SDK to npm, Chrome Web Store submission
-- [ ] v0.5 — Dashboard: violation reports UI, public audit log browser
+- [x] v0.4 — RFC 9421 alignment: Signature/Signature-Input/Signature-Agent headers, nonce replay protection, JWKS well-known endpoint, `ric sign` command
+- [ ] v0.5 — Deploy public registry, publish CLI+SDK to npm, Chrome Web Store submission
+- [ ] v0.6 — Dashboard: violation reports UI, public audit log browser
 - [ ] v1.0 — Decentralized registry (DID-based)
 
 ---

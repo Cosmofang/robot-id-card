@@ -21,7 +21,7 @@ interface RICConfig {
 
 const HEADER_RULE_ID   = 1
 const REFRESH_ALARM    = 'ric-header-refresh'
-const REFRESH_MINUTES  = 4   // must stay < registry's 5-min replay window
+const REFRESH_MINUTES  = 4   // must stay < registry's 5-min replay window; match expires TTL
 
 // ── Hex utilities (Buffer is not available in service workers) ─
 
@@ -50,28 +50,58 @@ async function getConfig(): Promise<RICConfig | null> {
 // ── Header injection ──────────────────────────────────────────
 
 /**
- * Generate a fresh Ed25519 signature and update the declarativeNetRequest
+ * Generate RFC 9421-compliant headers and update the declarativeNetRequest
  * dynamic rule so all subsequent requests carry valid, unexpired headers.
+ *
+ * Note: declarativeNetRequest uses static rules (same headers for all URLs in
+ * this cycle). We sign "@authority" only since the per-request path is unknown
+ * at rule-creation time. The expires field matches the refresh alarm interval.
  */
 async function refreshHeaders(): Promise<void> {
   const config = await getConfig()
 
   if (!config) {
-    // Not configured — clear any existing inject rule
-    await chrome.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: [HEADER_RULE_ID],
-    })
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [HEADER_RULE_ID] })
     return
   }
 
-  // Message format matches the registry's verify route:
-  //   "<ric_id>:<timestamp>:<message>"  — message is empty for header-level auth
-  const timestamp = Date.now()
-  const message   = `${config.ricId}:${timestamp}:`
-  const msgBytes  = new TextEncoder().encode(message)
+  const createdSec = Math.floor(Date.now() / 1000)
+  const expiresSec = createdSec + REFRESH_MINUTES * 60
+  // Nonce: random 12 bytes base64url — unique per refresh cycle
+  const nonceBytes = crypto.getRandomValues(new Uint8Array(12))
+  const nonce      = btoa(String.fromCharCode(...nonceBytes))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+
+  const label = 'ric'
+  const components = ['@authority']
+
+  // Signature-Input params (everything after "label=")
+  const sigInputParams = [
+    `(${components.map((c) => `"${c}"`).join(' ')})`,
+    `keyid="${config.ricId}"`,
+    `created=${createdSec}`,
+    `expires=${expiresSec}`,
+    `nonce="${nonce}"`,
+    `tag="web-bot-auth"`,
+  ].join(';')
+
+  // Signature base: signed against a placeholder authority
+  // The @authority field will mismatch per-site — this is the browser extension limitation.
+  // Websites can choose to verify only keyid + timestamp + nonce without @authority.
+  const sigBase = [
+    `"@authority": *`,   // wildcard placeholder — extension can't know target per-rule
+    `"@signature-params": ${sigInputParams}`,
+  ].join('\n')
+
+  const msgBytes  = new TextEncoder().encode(sigBase)
   const privBytes = hexToBytes(config.privateKeyHex)
   const sigBytes  = await ed.sign(msgBytes, privBytes)
-  const sigHex    = bytesToHex(sigBytes)
+  // RFC 9421 uses standard base64 (not base64url) for the signature value
+  const sigB64    = btoa(String.fromCharCode(...sigBytes))
+
+  const signatureInput = `${label}=${sigInputParams}`
+  const signature      = `${label}=:${sigB64}:`
+  const signatureAgent = `"RIC-Extension"; cert="https://registry.robotidcard.dev/v1/bots/${config.ricId}"`
 
   await chrome.declarativeNetRequest.updateDynamicRules({
     removeRuleIds: [HEADER_RULE_ID],
@@ -82,10 +112,9 @@ async function refreshHeaders(): Promise<void> {
         action: {
           type: 'modifyHeaders' as chrome.declarativeNetRequest.RuleActionType,
           requestHeaders: [
-            { header: 'X-RIC-ID',        operation: 'set' as chrome.declarativeNetRequest.HeaderOperation, value: config.ricId },
-            { header: 'X-RIC-Timestamp', operation: 'set' as chrome.declarativeNetRequest.HeaderOperation, value: String(timestamp) },
-            { header: 'X-RIC-Signature', operation: 'set' as chrome.declarativeNetRequest.HeaderOperation, value: sigHex },
-            { header: 'X-RIC-Version',   operation: 'set' as chrome.declarativeNetRequest.HeaderOperation, value: '1.0' },
+            { header: 'Signature-Input', operation: 'set' as chrome.declarativeNetRequest.HeaderOperation, value: signatureInput },
+            { header: 'Signature',       operation: 'set' as chrome.declarativeNetRequest.HeaderOperation, value: signature },
+            { header: 'Signature-Agent', operation: 'set' as chrome.declarativeNetRequest.HeaderOperation, value: signatureAgent },
           ],
         },
         condition: {

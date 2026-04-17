@@ -19,12 +19,18 @@ export function RICMiddleware(options: RICMiddlewareOptions = {}) {
   return async function ricMiddleware(req: any, res: any, next: () => void) {
     const headers = getRICHeaders(req)
 
-    // No RIC headers — not a bot, pass through
-    if (!headers.ricId) return next()
+    // No RIC headers at all — not a bot, pass through
+    const hasRFC9421 = !!(headers.signatureInput && headers.signature)
+    const hasLegacy  = !!headers.ricId
+    if (!hasRFC9421 && !hasLegacy) return next()
 
     const result = await verifyRICRequest(headers, {
       registryUrl: options.registryUrl,
-      cacheTtl: options.cacheTtl,
+      cacheTtl:    options.cacheTtl,
+      // RFC 9421: pass request context so registry can reconstruct signature base
+      authority: req.hostname || req.headers?.host?.split(':')[0],
+      method:    req.method,
+      path:      req.path,
     })
 
     if (!result) return next()

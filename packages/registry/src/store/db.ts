@@ -64,6 +64,15 @@ db.exec(`
     consecutive_after INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (ric_id) REFERENCES bots(id)
   );
+
+  -- RFC 9421 nonce tracking — prevents replay attacks
+  -- Nonces expire after 10 minutes; a background sweep cleans up old rows
+  CREATE TABLE IF NOT EXISTS used_nonces (
+    nonce      TEXT PRIMARY KEY,
+    ric_id     TEXT NOT NULL,
+    used_at    INTEGER NOT NULL  -- Unix seconds
+  );
+  CREATE INDEX IF NOT EXISTS idx_nonces_used_at ON used_nonces(used_at);
 `)
 
 export default db

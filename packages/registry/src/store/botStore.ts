@@ -63,6 +63,13 @@ const stmts = {
     AND timestamp > datetime('now', '-24 hours')
   `),
 
+  // RFC 9421 nonce statements
+  insertNonce: db.prepare(`
+    INSERT OR IGNORE INTO used_nonces (nonce, ric_id, used_at) VALUES (?, ?, ?)
+  `),
+  nonceExists: db.prepare(`SELECT 1 FROM used_nonces WHERE nonce = ?`),
+  sweepNonces: db.prepare(`DELETE FROM used_nonces WHERE used_at < ?`),
+
   // Claim statements
   countTodayClaims: db.prepare(`
     SELECT COUNT(*) as cnt FROM claims
@@ -139,6 +146,20 @@ export const botStore = {
   countRecentReports(id: string): number {
     const row = stmts.countRecentReports.get(id) as { cnt: number }
     return row.cnt
+  },
+
+  /**
+   * RFC 9421 nonce uniqueness check.
+   * Returns true if the nonce is fresh (never seen).
+   * Marks it as used and sweeps nonces older than 10 minutes.
+   */
+  checkAndMarkNonce(nonce: string, ricId: string, createdSec: number): boolean {
+    const existing = stmts.nonceExists.get(nonce)
+    if (existing) return false
+    stmts.insertNonce.run(nonce, ricId, createdSec)
+    // Sweep nonces older than 10 minutes
+    stmts.sweepNonces.run(createdSec - 600)
+    return true
   },
 
   /**

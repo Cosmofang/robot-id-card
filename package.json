@@ -1,6 +1,6 @@
 {
   "name": "robot-id-card",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Universal identity standard for AI bots and agents on the internet — cryptographically signed certificates, public audit registry, and permission-based access control",
   "homepage": "https://github.com/Cosmofang/robot-id-card",

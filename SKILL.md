@@ -2,8 +2,10 @@
 name: robot-id-card
 description: |
   Bot 身份认证标准 — 为 AI Agent 和机器人签发加密身份证书，让网站信任你的 bot。
-  内置 Ed25519 签名注册中心、CLI 工具、浏览器扩展和网站 SDK，支持分级权限控制（0-5级）、
-  每日签到信誉积累、公开审计日志。Universal identity standard for AI bots — 
+  遵循 RFC 9421 HTTP Message Signatures 国际标准，与 Cloudflare Web Bot Auth 生态兼容。
+  内置 Ed25519 签名注册中心、JWKS 公钥目录、nonce 防重放、CLI 工具、浏览器扩展和网站 SDK，
+  支持分级权限控制（0-5级）、每日签到信誉积累、公开审计日志。
+  Universal identity standard for AI bots — RFC 9421 aligned, Web Bot Auth compatible,
   cryptographically signed certificates, public audit registry, permission-based access control.
 keywords:
   - robot-id-card
@@ -176,4 +178,4 @@ npm install @robot-id-card/sdk       # 网站 SDK
 
 ---
 
-*Version: 0.2.0 · Created: 2026-03-24 · Updated: 2026-04-09*
+*Version: 0.4.0 · Created: 2026-03-24 · Updated: 2026-04-17 · RFC 9421 aligned*
